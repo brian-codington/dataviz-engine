@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataViz Engine — Interactive Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:         #0f172a;
+            --surface:    #1e293b;
+            --surface2:   #334155;
+            --border:     #334155;
+            --text:       #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent:     #6366f1;
+            --accent2:    #8b5cf6;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+            font-size: 14px;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 32px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .logo { font-size: 1.2em; font-weight: 700; }
+        .logo span { color: var(--accent); }
+        .demo-badge {
+            background: #6366f133;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-size: 0.72em;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .header-right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+        .npm-badge {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.78em;
+            font-family: monospace;
+            color: var(--text-muted);
+        }
+        .npm-badge span { color: var(--accent); }
+
+        /* ── Chart tabs ── */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 20px 32px 0;
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 8px 20px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 0.88em;
+            color: var(--text-muted);
+            border: 1px solid transparent;
+            border-bottom: none;
+            transition: all .15s;
+            white-space: nowrap;
+            background: transparent;
+        }
+        .tab:hover { color: var(--text); background: var(--surface); }
+        .tab.active {
+            color: var(--text);
+            background: var(--surface);
+            border-color: var(--border);
+            border-bottom-color: var(--surface);
+            margin-bottom: -1px;
+        }
+
+        /* ── Main layout ── */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 0;
+            min-height: calc(100vh - 120px);
+        }
+
+        /* ── Chart area ── */
+        .chart-area {
+            padding: 28px 32px;
+            border-right: 1px solid var(--border);
+        }
+        .chart-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .chart-title { font-size: 1.1em; font-weight: 600; margin-bottom: 4px; }
+        .chart-desc { color: var(--text-muted); font-size: 0.85em; }
+        .chart-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            position: relative;
+        }
+
+        /* ── Controls panel ── */
+        .controls {
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .controls-title {
+            font-size: 0.78em;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-label { font-size: 0.82em; color: var(--text-muted); }
+
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn {
+            padding: 5px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all .15s;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--text); }
+        .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+        .swatch {
+            width: 24px; height: 24px; border-radius: 6px;
+            cursor: pointer; border: 2px solid transparent;
+            transition: border-color .15s;
+        }
+        .swatch.active { border-color: #fff; }
+
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+        .toggle input { accent-color: var(--accent); }
+
+        /* ── Code snippet ── */
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.75em;
+            line-height: 1.6;
+            color: #e6edf3;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .code-key   { color: #ff7b72; }
+        .code-str   { color: #a5d6ff; }
+        .code-num   { color: #79c0ff; }
+        .code-fn    { color: #d2a8ff; }
+        .code-cmp   { color: #7ee787; }
+
+        /* ── Tooltip ── */
+        .chart-tooltip {
+            position: absolute;
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.8em;
+            pointer-events: none;
+            display: none;
+            z-index: 20;
+            box-shadow: 0 4px 16px rgba(0,0,0,.4);
+            min-width: 100px;
+        }
+        .tooltip-label { color: var(--text-muted); margin-bottom: 4px; font-size: .9em; }
+        .tooltip-value { font-weight: 700; font-size: 1.1em; }
+
+        /* ── Sparklines section ── */
+        .sparklines-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .sparkline-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .sparkline-label { font-size: 0.78em; color: var(--text-muted); margin-bottom: 6px; }
+        .sparkline-value { font-size: 1.3em; font-weight: 700; margin-bottom: 8px; }
+        .sparkline-change { font-size: 0.75em; }
+        .up   { color: #22c55e; }
+        .down { color: #ef4444; }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.8em;
+            border-top: 1px solid var(--border);
+        }
+        footer a { color: var(--accent); text-decoration: none; }
+
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+            .chart-area { border-right: none; border-bottom: 1px solid var(--border); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">dataviz<span>-engine</span></div>
+    <div class="demo-badge">INTERACTIVE DEMO</div>
+    <div class="header-right">
+        <div class="npm-badge"><span>npm install</span> dataviz-engine</div>
+    </div>
+</header>
+
+<div class="tabs">
+    <div class="tab active" onclick="switchChart('line')">📈 Line Chart</div>
+    <div class="tab" onclick="switchChart('bar')">📊 Bar Chart</div>
+    <div class="tab" onclick="switchChart('area')">🏔️ Area Chart</div>
+    <div class="tab" onclick="switchChart('pie')">🥧 Pie / Donut</div>
+    <div class="tab" onclick="switchChart('scatter')">⚬ Scatter Plot</div>
+    <div class="tab" onclick="switchChart('sparkline')">⚡ Sparklines</div>
+</div>
+
+<div class="main">
+    <div class="chart-area">
+        <div class="chart-header">
+            <div>
+                <div class="chart-title" id="chart-title">Line Chart</div>
+                <div class="chart-desc" id="chart-desc">Visualize trends over time with smooth curves and interactive tooltips.</div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <svg id="main-chart" width="100%" style="display:block"></svg>
+            <div class="chart-tooltip" id="tooltip">
+                <div class="tooltip-label" id="tooltip-label"></div>
+                <div class="tooltip-value" id="tooltip-value"></div>
+            </div>
+        </div>
+
+        <!-- Sparklines grid (hidden by default) -->
+        <div class="sparklines-grid" id="sparklines-grid" style="display:none"></div>
+
+        <!-- Code snippet -->
+        <div style="margin-top:20px">
+            <div style="font-size:.78em;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Usage</div>
+            <div class="code-block" id="code-snippet"></div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <div>
+            <div class="controls-title">Chart Options</div>
+        </div>
+
+        <div class="control-group" id="ctrl-dataset">
+            <div class="control-label">Dataset</div>
+            <div class="btn-group">
+                <div class="btn active" onclick="setDataset('monthly')">Monthly</div>
+                <div class="btn" onclick="setDataset('quarterly')">Quarterly</div>
+                <div class="btn" onclick="setDataset('weekly')">Weekly</div>
+            </div>
+        </div>
+
+        <div class="control-group" id="ctrl-curve">
+            <div class="control-label">Curve Style</div>
+            <div class="btn-group">
+                <div class="btn active" onclick="setCurve('monotone')">Smooth</div>
+                <div class="btn" onclick="setCurve('linear')">Linear</div>
+                <div class="btn" onclick="setCurve('step')">Step</div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">Color Palette</div>
+            <div class="color-swatches" id="color-swatches">
+                <div class="swatch active" style="background:#6366f1" onclick="setPalette(0)" title="Indigo"></div>
+                <div class="swatch" style="background:#22c55e" onclick="setPalette(1)" title="Green"></div>
+                <div class="swatch" style="background:#f97316" onclick="setPalette(2)" title="Orange"></div>
+                <div class="swatch" style="background:#ec4899" onclick="setPalette(3)" title="Pink"></div>
+                <div class="swatch" style="background:#06b6d4" onclick="setPalette(4)" title="Cyan"></div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">Options</div>
+            <label class="toggle"><input type="checkbox" id="toggle-dots" checked onchange="render()"> Show data points</label>
+            <label class="toggle"><input type="checkbox" id="toggle-grid" checked onchange="render()"> Show grid lines</label>
+            <label class="toggle"><input type="checkbox" id="toggle-multi" onchange="render()"> Multiple series</label>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">Regenerate Data</div>
+            <div class="btn-group">
+                <div class="btn" onclick="randomizeData()" style="width:100%;text-align:center">🎲 New Dataset</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer>
+    dataviz-engine — interactive demo &nbsp;|&nbsp;
+    <a href="https://github.com/brian-codington/dataviz-engine" target="_blank">View Source on GitHub</a>
+    &nbsp;|&nbsp;
+    <a href="https://github.com/brian-codington/brian-codington-portfolio" target="_blank">Portfolio</a>
+</footer>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+
+let currentChart = 'line';
+let currentCurve = d3.curveMonotoneX;
+let currentPalette = ['#6366f1','#8b5cf6','#06b6d4','#22c55e','#f59e0b'];
+let currentDataset = 'monthly';
+
+const PALETTES = [
+    ['#6366f1','#8b5cf6','#06b6d4','#22c55e','#f59e0b'],
+    ['#22c55e','#16a34a','#06b6d4','#0891b2','#84cc16'],
+    ['#f97316','#ea580c','#eab308','#ca8a04','#ef4444'],
+    ['#ec4899','#db2777','#a855f7','#9333ea','#f43f5e'],
+    ['#06b6d4','#0891b2','#6366f1','#8b5cf6','#22c55e']
+];
+
+const DATASETS = {
+    monthly: {
+        labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+        gen: () => Array.from({length:12}, () => Math.floor(Math.random()*70000)+20000)
+    },
+    quarterly: {
+        labels: ['Q1 2022','Q2 2022','Q3 2022','Q4 2022','Q1 2023','Q2 2023','Q3 2023','Q4 2023'],
+        gen: () => Array.from({length:8}, () => Math.floor(Math.random()*200000)+80000)
+    },
+    weekly: {
+        labels: Array.from({length:12}, (_,i) => `Wk ${i+1}`),
+        gen: () => Array.from({length:12}, () => Math.floor(Math.random()*15000)+3000)
+    }
+};
+
+let data1 = DATASETS.monthly.gen();
+let data2 = DATASETS.monthly.gen();
+let labels = DATASETS.monthly.labels;
+
+// ============================================================
+//  HELPERS
+// ============================================================
+
+function getWidth() {
+    return document.getElementById('main-chart').parentElement.clientWidth - 48;
+}
+
+function showTip(evt, label, value, color) {
+    const tip = document.getElementById('tooltip');
+    const container = document.getElementById('main-chart').parentElement;
+    const rect = container.getBoundingClientRect();
+    tip.style.display = 'block';
+    tip.style.left = (evt.clientX - rect.left + 12) + 'px';
+    tip.style.top  = (evt.clientY - rect.top  - 10) + 'px';
+    document.getElementById('tooltip-label').textContent = label;
+    document.getElementById('tooltip-value').style.color = color;
+    document.getElementById('tooltip-value').textContent = '$' + Number(value).toLocaleString();
+}
+
+function hideTip() {
+    document.getElementById('tooltip').style.display = 'none';
+}
+
+// ============================================================
+//  RENDER DISPATCH
+// ============================================================
+
+function render() {
+    const svg = d3.select('#main-chart');
+    svg.selectAll('*').remove();
+    hideTip();
+
+    switch (currentChart) {
+        case 'line':    renderLine(svg); break;
+        case 'bar':     renderBar(svg); break;
+        case 'area':    renderArea(svg); break;
+        case 'pie':     renderPie(svg); break;
+        case 'scatter': renderScatter(svg); break;
+        case 'sparkline': renderSparklines(); break;
+    }
+
+    updateCode();
+}
+
+// ============================================================
+//  LINE CHART
+// ============================================================
+
+function renderLine(svg) {
+    document.getElementById('sparklines-grid').style.display = 'none';
+    svg.style('display', 'block');
+
+    const W = getWidth(), H = 320;
+    const mg = {top:20, right:20, bottom:36, left:60};
+    const iW = W - mg.left - mg.right;
+    const iH = H - mg.top - mg.bottom;
+    svg.attr('height', H);
+
+    const multi = document.getElementById('toggle-multi').checked;
+    const showDots = document.getElementById('toggle-dots').checked;
+    const showGrid = document.getElementById('toggle-grid').checked;
+
+    const allVals = multi ? [...data1, ...data2] : data1;
+    const x = d3.scalePoint().domain(labels).range([0, iW]).padding(.1);
+    const y = d3.scaleLinear().domain([0, d3.max(allVals)*1.1]).nice().range([iH, 0]);
+
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    // Grid
+    if (showGrid) {
+        g.selectAll('.grid-line').data(y.ticks(5)).join('line')
+            .attr('x1',0).attr('x2',iW)
+            .attr('y1', d => y(d)).attr('y2', d => y(d))
+            .attr('stroke','#1e293b').attr('stroke-dasharray','4 4');
+    }
+
+    // Axes
+    g.append('g').attr('transform',`translate(0,${iH})`)
+        .call(d3.axisBottom(x).tickSize(0))
+        .call(g => g.select('.domain').attr('stroke','#334155'))
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('dy','1.2em').attr('font-size',11));
+
+    g.append('g').call(d3.axisLeft(y).ticks(5).tickFormat(d => '$'+d3.format('.2s')(d)))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('font-size',11))
+        .call(g => g.selectAll('.tick line').attr('stroke','#334155'));
+
+    const drawSeries = (vals, colorIdx) => {
+        const color = currentPalette[colorIdx];
+        const line = d3.line()
+            .x((_, i) => x(labels[i]))
+            .y(d => y(d))
+            .curve(currentCurve);
+
+        g.append('path').datum(vals)
+            .attr('fill','none').attr('stroke', color)
+            .attr('stroke-width', 2.5).attr('stroke-linecap','round')
+            .attr('d', line);
+
+        if (showDots) {
+            g.selectAll(`.dot-${colorIdx}`).data(vals).join('circle')
+                .attr('class', `dot-${colorIdx}`)
+                .attr('cx', (_,i) => x(labels[i]))
+                .attr('cy', d => y(d))
+                .attr('r', 4).attr('fill', color)
+                .attr('stroke','#0f172a').attr('stroke-width', 2)
+                .style('cursor','pointer')
+                .on('mouseenter', function(evt, d) { d3.select(this).attr('r',6); showTip(evt, labels[vals.indexOf(d)], d, color); })
+                .on('mouseleave', function() { d3.select(this).attr('r',4); hideTip(); });
+        }
+    };
+
+    drawSeries(data1, 0);
+    if (multi) drawSeries(data2, 1);
+}
+
+// ============================================================
+//  BAR CHART
+// ============================================================
+
+function renderBar(svg) {
+    document.getElementById('sparklines-grid').style.display = 'none';
+    svg.style('display', 'block');
+
+    const W = getWidth(), H = 320;
+    const mg = {top:20, right:20, bottom:36, left:60};
+    const iW = W - mg.left - mg.right;
+    const iH = H - mg.top - mg.bottom;
+    svg.attr('height', H);
+
+    const multi = document.getElementById('toggle-multi').checked;
+    const showGrid = document.getElementById('toggle-grid').checked;
+
+    const x0 = d3.scaleBand().domain(labels).range([0, iW]).padding(.25);
+    const x1 = d3.scaleBand().domain(multi ? ['a','b'] : ['a']).range([0, x0.bandwidth()]).padding(.05);
+    const allVals = multi ? [...data1,...data2] : data1;
+    const y = d3.scaleLinear().domain([0, d3.max(allVals)*1.1]).nice().range([iH, 0]);
+
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    if (showGrid) {
+        g.selectAll('.gl').data(y.ticks(5)).join('line')
+            .attr('x1',0).attr('x2',iW)
+            .attr('y1', d=>y(d)).attr('y2', d=>y(d))
+            .attr('stroke','#1e293b').attr('stroke-dasharray','4 4');
+    }
+
+    g.append('g').attr('transform',`translate(0,${iH})`)
+        .call(d3.axisBottom(x0).tickSize(0))
+        .call(g => g.select('.domain').attr('stroke','#334155'))
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('dy','1.2em').attr('font-size',11));
+
+    g.append('g').call(d3.axisLeft(y).ticks(5).tickFormat(d => '$'+d3.format('.2s')(d)))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('font-size',11))
+        .call(g => g.selectAll('.tick line').attr('stroke','#334155'));
+
+    const drawBars = (vals, key, colorIdx) => {
+        const color = currentPalette[colorIdx];
+        g.selectAll(`.bar-${key}`).data(vals).join('rect')
+            .attr('class', `bar-${key}`)
+            .attr('x', (_,i) => x0(labels[i]) + x1(key))
+            .attr('y', d => y(d))
+            .attr('width', x1.bandwidth())
+            .attr('height', d => iH - y(d))
+            .attr('fill', color).attr('rx', 4)
+            .style('cursor','pointer')
+            .on('mouseenter', function(evt,d) { d3.select(this).attr('opacity',.8); showTip(evt, labels[vals.indexOf(d)], d, color); })
+            .on('mouseleave', function() { d3.select(this).attr('opacity',1); hideTip(); });
+    };
+
+    drawBars(data1, 'a', 0);
+    if (multi) drawBars(data2, 'b', 1);
+}
+
+// ============================================================
+//  AREA CHART
+// ============================================================
+
+function renderArea(svg) {
+    document.getElementById('sparklines-grid').style.display = 'none';
+    svg.style('display', 'block');
+
+    const W = getWidth(), H = 320;
+    const mg = {top:20, right:20, bottom:36, left:60};
+    const iW = W - mg.left - mg.right;
+    const iH = H - mg.top - mg.bottom;
+    svg.attr('height', H);
+
+    const multi = document.getElementById('toggle-multi').checked;
+    const showGrid = document.getElementById('toggle-grid').checked;
+
+    const allVals = multi ? [...data1,...data2] : data1;
+    const x = d3.scalePoint().domain(labels).range([0, iW]).padding(.1);
+    const y = d3.scaleLinear().domain([0, d3.max(allVals)*1.15]).nice().range([iH, 0]);
+
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    if (showGrid) {
+        g.selectAll('.gl').data(y.ticks(5)).join('line')
+            .attr('x1',0).attr('x2',iW)
+            .attr('y1', d=>y(d)).attr('y2', d=>y(d))
+            .attr('stroke','#1e293b').attr('stroke-dasharray','4 4');
+    }
+
+    g.append('g').attr('transform',`translate(0,${iH})`)
+        .call(d3.axisBottom(x).tickSize(0))
+        .call(g => g.select('.domain').attr('stroke','#334155'))
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('dy','1.2em').attr('font-size',11));
+
+    g.append('g').call(d3.axisLeft(y).ticks(5).tickFormat(d => '$'+d3.format('.2s')(d)))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('font-size',11))
+        .call(g => g.selectAll('.tick line').attr('stroke','#334155'));
+
+    const drawArea = (vals, colorIdx) => {
+        const color = currentPalette[colorIdx];
+        const id = `grad-${colorIdx}-${Date.now()}`;
+
+        const defs = svg.append('defs');
+        const grad = defs.append('linearGradient').attr('id', id).attr('x1','0').attr('y1','0').attr('x2','0').attr('y2','1');
+        grad.append('stop').attr('offset','0%').attr('stop-color', color).attr('stop-opacity', .35);
+        grad.append('stop').attr('offset','100%').attr('stop-color', color).attr('stop-opacity', .02);
+
+        const area = d3.area().x((_,i) => x(labels[i])).y0(iH).y1(d => y(d)).curve(currentCurve);
+        const line = d3.line().x((_,i) => x(labels[i])).y(d => y(d)).curve(currentCurve);
+
+        g.append('path').datum(vals).attr('fill', `url(#${id})`).attr('d', area);
+        g.append('path').datum(vals).attr('fill','none').attr('stroke', color).attr('stroke-width',2).attr('d', line);
+    };
+
+    if (multi) drawArea(data2, 1);
+    drawArea(data1, 0);
+}
+
+// ============================================================
+//  PIE / DONUT CHART
+// ============================================================
+
+function renderPie(svg) {
+    document.getElementById('sparklines-grid').style.display = 'none';
+    svg.style('display', 'block');
+
+    const W = getWidth(), H = 320;
+    svg.attr('height', H);
+
+    const isDonut = document.getElementById('toggle-multi').checked;
+    const R = Math.min(W, H) / 2 - 40;
+    const pieData = labels.slice(0,6).map((l,i) => ({ label: l, value: data1[i] }));
+
+    const pie = d3.pie().value(d => d.value).sort(null);
+    const arc = d3.arc().innerRadius(isDonut ? R*.55 : 0).outerRadius(R);
+    const arcHover = d3.arc().innerRadius(isDonut ? R*.55 : 0).outerRadius(R + 8);
+
+    const g = svg.append('g').attr('transform', `translate(${W/2},${H/2})`);
+
+    g.selectAll('path').data(pie(pieData)).join('path')
+        .attr('d', arc)
+        .attr('fill', (_,i) => currentPalette[i % currentPalette.length])
+        .attr('stroke','#0f172a').attr('stroke-width', 2)
+        .style('cursor','pointer')
+        .on('mouseenter', function(evt, d) {
+            d3.select(this).attr('d', arcHover);
+            showTip(evt, d.data.label, d.data.value, currentPalette[pie(pieData).indexOf(d) % currentPalette.length]);
+        })
+        .on('mouseleave', function(evt, d) { d3.select(this).attr('d', arc); hideTip(); });
+
+    if (isDonut) {
+        const total = d3.sum(pieData, d => d.value);
+        g.append('text').attr('text-anchor','middle').attr('dy','-.1em')
+            .attr('fill','#f1f5f9').attr('font-size',20).attr('font-weight',700)
+            .text('$' + d3.format('.2s')(total));
+        g.append('text').attr('text-anchor','middle').attr('dy','1.4em')
+            .attr('fill','#94a3b8').attr('font-size',11).text('Total Revenue');
+    }
+
+    // Legend
+    const legend = svg.append('g').attr('transform', `translate(${W - 110}, ${H/2 - pieData.length*12})`);
+    pieData.forEach((d, i) => {
+        const row = legend.append('g').attr('transform', `translate(0,${i*22})`);
+        row.append('rect').attr('width',10).attr('height',10).attr('rx',2).attr('fill', currentPalette[i % currentPalette.length]);
+        row.append('text').attr('x',16).attr('y',9).attr('fill','#94a3b8').attr('font-size',11).text(d.label);
+    });
+}
+
+// ============================================================
+//  SCATTER PLOT
+// ============================================================
+
+function renderScatter(svg) {
+    document.getElementById('sparklines-grid').style.display = 'none';
+    svg.style('display', 'block');
+
+    const W = getWidth(), H = 320;
+    const mg = {top:20, right:20, bottom:36, left:60};
+    const iW = W - mg.left - mg.right;
+    const iH = H - mg.top - mg.bottom;
+    svg.attr('height', H);
+
+    const points = Array.from({length:40}, () => ({
+        x: Math.random() * 100,
+        y: Math.random() * 100000 + 10000,
+        size: Math.random() * 8 + 4,
+        group: Math.floor(Math.random() * 3)
+    }));
+
+    const x = d3.scaleLinear().domain([0,100]).range([0, iW]);
+    const y = d3.scaleLinear().domain([0,120000]).range([iH, 0]);
+
+    const g = svg.append('g').attr('transform', `translate(${mg.left},${mg.top})`);
+
+    if (document.getElementById('toggle-grid').checked) {
+        g.selectAll('.gl').data(y.ticks(5)).join('line')
+            .attr('x1',0).attr('x2',iW)
+            .attr('y1',d=>y(d)).attr('y2',d=>y(d))
+            .attr('stroke','#1e293b').attr('stroke-dasharray','4 4');
+    }
+
+    g.append('g').attr('transform',`translate(0,${iH})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d=>d+'%'))
+        .call(g => g.select('.domain').attr('stroke','#334155'))
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('font-size',11));
+
+    g.append('g').call(d3.axisLeft(y).ticks(5).tickFormat(d=>'$'+d3.format('.2s')(d)))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('text').attr('fill','#94a3b8').attr('font-size',11))
+        .call(g => g.selectAll('.tick line').attr('stroke','#334155'));
+
+    g.selectAll('circle').data(points).join('circle')
+        .attr('cx', d => x(d.x)).attr('cy', d => y(d.y))
+        .attr('r', d => d.size)
+        .attr('fill', d => currentPalette[d.group])
+        .attr('opacity', .75).attr('stroke','#0f172a').attr('stroke-width',1)
+        .style('cursor','pointer')
+        .on('mouseenter', function(evt, d) {
+            d3.select(this).attr('opacity',1).attr('r', d.size+3);
+            showTip(evt, `${d.x.toFixed(1)}% growth`, d.y, currentPalette[d.group]);
+        })
+        .on('mouseleave', function(evt, d) { d3.select(this).attr('opacity',.75).attr('r', d.size); hideTip(); });
+}
+
+// ============================================================
+//  SPARKLINES
+// ============================================================
+
+function renderSparklines() {
+    document.getElementById('main-chart').attr && d3.select('#main-chart').selectAll('*').remove();
+    d3.select('#main-chart').attr('height', 0);
+    document.getElementById('sparklines-grid').style.display = 'grid';
+
+    const metrics = [
+        { label: 'Monthly Revenue', value: '$91,200', change: '+14.2%', up: true, color: currentPalette[0] },
+        { label: 'Active Users', value: '15,482', change: '+8.7%', up: true, color: currentPalette[1] },
+        { label: 'Conversion Rate', value: '3.42%', change: '-0.3%', up: false, color: currentPalette[2] },
+        { label: 'Avg Session', value: '4m 12s', change: '+22.1%', up: true, color: currentPalette[0] },
+        { label: 'Support Tickets', value: '142', change: '-18.4%', up: true, color: currentPalette[3] },
+        { label: 'NPS Score', value: '72', change: '+5pts', up: true, color: currentPalette[4] }
+    ];
+
+    const grid = document.getElementById('sparklines-grid');
+    grid.innerHTML = '';
+
+    metrics.forEach(m => {
+        const vals = Array.from({length:12}, () => Math.floor(Math.random()*80)+20);
+        const card = document.createElement('div');
+        card.className = 'sparkline-card';
+        card.innerHTML = `
+            <div class="sparkline-label">${m.label}</div>
+            <div class="sparkline-value">${m.value}</div>
+            <svg class="sparkline-svg" width="100%" height="40"></svg>
+            <div class="sparkline-change ${m.up ? 'up' : 'down'}">${m.up ? '↑' : '↓'} ${m.change}</div>
+        `;
+        grid.appendChild(card);
+
+        const svgEl = card.querySelector('.sparkline-svg');
+        const W = svgEl.parentElement.clientWidth - 28;
+        const H = 40;
+        const svg = d3.select(svgEl).attr('width', W);
+        const x = d3.scaleLinear().domain([0, vals.length-1]).range([0, W]);
+        const y = d3.scaleLinear().domain([d3.min(vals), d3.max(vals)]).range([H-2, 2]);
+
+        const id = `sg-${Math.random().toString(36).slice(2)}`;
+        const defs = svg.append('defs');
+        const grad = defs.append('linearGradient').attr('id',id).attr('x1','0').attr('y1','0').attr('x2','0').attr('y2','1');
+        grad.append('stop').attr('offset','0%').attr('stop-color',m.color).attr('stop-opacity',.3);
+        grad.append('stop').attr('offset','100%').attr('stop-color',m.color).attr('stop-opacity',0);
+
+        const area = d3.area().x((_,i)=>x(i)).y0(H).y1(d=>y(d)).curve(d3.curveMonotoneX);
+        const line = d3.line().x((_,i)=>x(i)).y(d=>y(d)).curve(d3.curveMonotoneX);
+
+        svg.append('path').datum(vals).attr('fill',`url(#${id})`).attr('d',area);
+        svg.append('path').datum(vals).attr('fill','none').attr('stroke',m.color).attr('stroke-width',1.5).attr('d',line);
+    });
+}
+
+// ============================================================
+//  CONTROLS
+// ============================================================
+
+function switchChart(type) {
+    currentChart = type;
+    document.querySelectorAll('.tab').forEach((t,i) => {
+        t.classList.toggle('active', ['line','bar','area','pie','scatter','sparkline'][i] === type);
+    });
+
+    const titles = {
+        line: ['Line Chart', 'Visualize trends over time with smooth curves and interactive tooltips.'],
+        bar: ['Bar Chart', 'Compare values across categories with grouped or stacked bars.'],
+        area: ['Area Chart', 'Show cumulative data and volume with filled gradient areas.'],
+        pie: ['Pie / Donut Chart', 'Display proportional data. Toggle the "Multiple series" option for a donut.'],
+        scatter: ['Scatter Plot', 'Explore correlations between two variables with sized, colored points.'],
+        sparkline: ['Sparklines', 'Compact inline charts perfect for dashboards and metric cards.']
+    };
+    document.getElementById('chart-title').textContent = titles[type][0];
+    document.getElementById('chart-desc').textContent  = titles[type][1];
+
+    const showCurve = ['line','area'].includes(type);
+    document.getElementById('ctrl-curve').style.display = showCurve ? '' : 'none';
+
+    render();
+}
+
+function setDataset(key) {
+    currentDataset = key;
+    labels = DATASETS[key].labels;
+    data1  = DATASETS[key].gen();
+    data2  = DATASETS[key].gen();
+    document.querySelectorAll('#ctrl-dataset .btn').forEach((b,i) => {
+        b.classList.toggle('active', ['monthly','quarterly','weekly'][i] === key);
+    });
+    render();
+}
+
+function setCurve(type) {
+    const map = { monotone: d3.curveMonotoneX, linear: d3.curveLinear, step: d3.curveStep };
+    currentCurve = map[type];
+    document.querySelectorAll('#ctrl-curve .btn').forEach((b,i) => {
+        b.classList.toggle('active', ['monotone','linear','step'][i] === type);
+    });
+    render();
+}
+
+function setPalette(idx) {
+    currentPalette = PALETTES[idx];
+    document.querySelectorAll('.swatch').forEach((s,i) => s.classList.toggle('active', i === idx));
+    render();
+}
+
+function randomizeData() {
+    data1 = DATASETS[currentDataset].gen();
+    data2 = DATASETS[currentDataset].gen();
+    render();
+}
+
+// ============================================================
+//  CODE SNIPPETS
+// ============================================================
+
+const SNIPPETS = {
+    line: `<span class="code-cmp">&lt;LineChart</span>
+  <span class="code-key">data</span>={data}
+  <span class="code-key">xKey</span>=<span class="code-str">"month"</span>
+  <span class="code-key">yKey</span>=<span class="code-str">"revenue"</span>
+  <span class="code-key">height</span>={<span class="code-num">300</span>}
+  <span class="code-key">curve</span>=<span class="code-str">"monotone"</span>
+  <span class="code-key">dot</span>
+  <span class="code-key">accessible</span>
+<span class="code-cmp">/&gt;</span>`,
+    bar: `<span class="code-cmp">&lt;BarChart</span>
+  <span class="code-key">data</span>={data}
+  <span class="code-key">xKey</span>=<span class="code-str">"month"</span>
+  <span class="code-key">yKey</span>={[<span class="code-str">"revenue"</span>, <span class="code-str">"costs"</span>]}
+  <span class="code-key">height</span>={<span class="code-num">300</span>}
+  <span class="code-key">radius</span>={<span class="code-num">4</span>}
+<span class="code-cmp">/&gt;</span>`,
+    area: `<span class="code-cmp">&lt;AreaChart</span>
+  <span class="code-key">data</span>={data}
+  <span class="code-key">xKey</span>=<span class="code-str">"month"</span>
+  <span class="code-key">yKey</span>=<span class="code-str">"revenue"</span>
+  <span class="code-key">fillOpacity</span>={<span class="code-num">0.3</span>}
+  <span class="code-key">curve</span>=<span class="code-str">"monotone"</span>
+<span class="code-cmp">/&gt;</span>`,
+    pie: `<span class="code-cmp">&lt;DonutChart</span>
+  <span class="code-key">data</span>={data}
+  <span class="code-key">dataKey</span>=<span class="code-str">"value"</span>
+  <span class="code-key">nameKey</span>=<span class="code-str">"label"</span>
+  <span class="code-key">innerRadius</span>={<span class="code-num">60</span>}
+  <span class="code-key">label</span>
+<span class="code-cmp">/&gt;</span>`,
+    scatter: `<span class="code-cmp">&lt;ScatterPlot</span>
+  <span class="code-key">data</span>={data}
+  <span class="code-key">xKey</span>=<span class="code-str">"growth"</span>
+  <span class="code-key">yKey</span>=<span class="code-str">"revenue"</span>
+  <span class="code-key">sizeKey</span>=<span class="code-str">"size"</span>
+  <span class="code-key">colorKey</span>=<span class="code-str">"group"</span>
+<span class="code-cmp">/&gt;</span>`,
+    sparkline: `<span class="code-cmp">&lt;Sparkline</span>
+  <span class="code-key">data</span>={[<span class="code-num">42</span>, <span class="code-num">58</span>, <span class="code-num">51</span>, <span class="code-num">73</span>, <span class="code-num">68</span>]}
+  <span class="code-key">width</span>={<span class="code-num">120</span>}
+  <span class="code-key">height</span>={<span class="code-num">40</span>}
+  <span class="code-key">color</span>=<span class="code-str">"#6366f1"</span>
+  <span class="code-key">fillOpacity</span>={<span class="code-num">0.2</span>}
+<span class="code-cmp">/&gt;</span>`
+};
+
+function updateCode() {
+    document.getElementById('code-snippet').innerHTML = SNIPPETS[currentChart] || '';
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
